@@ -135,6 +135,8 @@ void handleEncoder() {
   uint8_t currentAB = (digitalRead(POTENTIO_RIGHT) << 1) | digitalRead(POTENTIO_LEFT);
   if (currentAB == lastAB) return;
   // voir https://www.youtube.com/watch?v=9j-y6XlaE80&ab_channel=FriendlyWire
+
+  // Sens de rotation horaire 00 → 01 → 11 → 10 → 00 ...
   // Rotation CW
   if ((lastAB == 0b00 && currentAB == 0b01) ||
       (lastAB == 0b01 && currentAB == 0b11) ||
@@ -144,6 +146,7 @@ void handleEncoder() {
       cwCount++;
     }
   }
+  // sens de rotation anti-horaire 00 → 10 → 11 → 01 → 00 ...
   // Rotation CCW
   else if ((lastAB == 0b00 && currentAB == 0b10) ||
            (lastAB == 0b10 && currentAB == 0b11) ||
@@ -154,5 +157,6 @@ void handleEncoder() {
     }
   }
 
+  // on update la valeur de lastAB pour savoir le sens de rotation pour la prochaine interruption
   lastAB = currentAB;
 }
