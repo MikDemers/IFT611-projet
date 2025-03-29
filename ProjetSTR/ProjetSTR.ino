@@ -14,11 +14,12 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 SettingsScreen* settingsScreen = nullptr;
 MainScreen* mainScreen = nullptr;
 
+unsigned long lastButtonTime = 0;
 bool inEditingMode = false;
 
- int cwCount = 0;
- int ccwCount = 0;
- uint8_t lastAB = 0;
+int cwCount = 0;
+int ccwCount = 0;
+uint8_t lastAB = 0;
 
 
 
@@ -38,8 +39,9 @@ void setup() {
   pinMode(PUSH_BUTTON, INPUT_PULLUP);
   pinMode(POTENTIO_RIGHT, INPUT);
   pinMode(POTENTIO_LEFT, INPUT);
-  attachInterrupt(digitalPinToInterrupt(POTENTIO_RIGHT), handleEncoder ,CHANGE);
-  attachInterrupt(digitalPinToInterrupt(POTENTIO_LEFT), handleEncoder ,CHANGE);
+  attachInterrupt(digitalPinToInterrupt(POTENTIO_RIGHT), onEncoderChange ,CHANGE);
+  attachInterrupt(digitalPinToInterrupt(POTENTIO_LEFT), onEncoderChange ,CHANGE);
+
   // Efface l'écran pour partir sur une base propre
   display.clearDisplay();
   display.display();
@@ -55,9 +57,20 @@ void setup() {
 }
 
 void loop() {
-  static unsigned long lastButtonTime = 0;
-  unsigned long currentTime = millis();
+  encoderLoop();
+  buttonLoop();
+  soundLoop();
 
+  delay(50);
+}
+
+
+void soundLoop() {
+  
+}
+
+
+void encoderLoop() {
   // Encoder logique
   int localCW = cwCount;
   int localCCW = ccwCount;
@@ -86,7 +99,7 @@ void loop() {
       }
     }
   }
-  // juste pour tester
+  // DEBUG en console.
   // else {
   //   // Si on n'est pas en mode édition, vous pouvez laisser afficher les messages CW/CCW
   //   while (localCW-- > 0) {
@@ -96,10 +109,15 @@ void loop() {
   //     Serial.println("CCW");
   //   }
   // }
+}
+
+
+void buttonLoop() {
+  unsigned long currentTime = millis();
 
   // Regarder si le bouton a été pressé ET si le temps écoulé depuis la dernière pression est supérieur à 300 ms
   // car sinon peut être interprété comme plusieurs pressions
- if (digitalRead(PUSH_BUTTON) == LOW && (currentTime - lastButtonTime > 300)) {
+  if (digitalRead(PUSH_BUTTON) == LOW && (currentTime - lastButtonTime > 300)) {
     lastButtonTime = currentTime;
     Serial.println("Bouton pressé");
     
@@ -127,11 +145,9 @@ void loop() {
     mainScreen->update();
     mainScreen->draw();
   }
-
-  delay(50);
 }
 
-void handleEncoder() {
+void onEncoderChange() {
   uint8_t currentAB = (digitalRead(POTENTIO_RIGHT) << 1) | digitalRead(POTENTIO_LEFT);
   if (currentAB == lastAB) return;
   // voir https://www.youtube.com/watch?v=9j-y6XlaE80&ab_channel=FriendlyWire

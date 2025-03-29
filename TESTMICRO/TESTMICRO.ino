@@ -1,5 +1,6 @@
 // https://github.com/0015/ThatProject/blob/master/ESP32_MICROPHONE/ESP32_INMP441_SETUP_ESP-2.X/ESP32_INMP441_SETUP_ESP-2.X.ino
 #include <driver/i2s.h>
+#include <arduinoFFT.h>
 #define I2S_WS 26
 #define I2S_SD 25
 #define I2S_SCK 27
@@ -19,19 +20,18 @@ void setup() {
 }
 
 void loop() {
-
   size_t bytesIn = 0;
   esp_err_t result = i2s_read(I2S_PORT, &sBuffer, bufferLen, &bytesIn, portMAX_DELAY);
   if (result == ESP_OK)
   {
-    int samples_read = bytesIn / 8;
+    int samples_read = bytesIn / 2;
     if (samples_read > 0) {
-      float mean = 0;
       for (int i = 0; i < samples_read; ++i) {
-        mean += (sBuffer[i]);
+        for (int j = 0; j < sBuffer[i]/10; j++) {
+          Serial.print("*");
+        }
+        Serial.print("\n");
       }
-      mean /= samples_read;
-      Serial.println(mean);
     }
   }
 }

@@ -43,8 +43,8 @@ class MainScreen : public Screen<MainScreen> {
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(SSD1306_WHITE);
-        display.setCursor(32, 0);
-        display.println("Port. Eq. 1.0");
+        display.setCursor(20, 0);
+        display.println("Portable EQ 1.0");
         display.display();
     }
 };
