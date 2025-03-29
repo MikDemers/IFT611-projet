@@ -16,10 +16,11 @@ MainScreen* mainScreen = nullptr;
 
 bool inEditingMode = false;
 
-int counter = 0;
-int currentStateCLK;
-int lastStateCLK;
-String currentDir ="";
+ int cwCount = 0;
+ int ccwCount = 0;
+ uint8_t lastAB = 0;
+
+
 
 void setup() {
   Serial.begin(115200);
@@ -35,11 +36,10 @@ void setup() {
 
   // Initialisation des boutons + potentiomètre
   pinMode(PUSH_BUTTON, INPUT_PULLUP);
-  pinMode(POTENTIO_RIGHT, INPUT_PULLUP);
-  pinMode(POTENTIO_LEFT, INPUT_PULLUP);
-
-  lastStateCLK = digitalRead(POTENTIO_RIGHT);
-
+  pinMode(POTENTIO_RIGHT, INPUT);
+  pinMode(POTENTIO_LEFT, INPUT);
+  attachInterrupt(digitalPinToInterrupt(POTENTIO_RIGHT), handleEncoder ,CHANGE);
+  attachInterrupt(digitalPinToInterrupt(POTENTIO_LEFT), handleEncoder ,CHANGE);
   // Efface l'écran pour partir sur une base propre
   display.clearDisplay();
   display.display();
@@ -58,33 +58,44 @@ void loop() {
   static unsigned long lastButtonTime = 0;
   unsigned long currentTime = millis();
 
-  // Read the current state of CLK
-	currentStateCLK = digitalRead(POTENTIO_RIGHT);
+  // Encoder logique
+  int localCW = cwCount;
+  int localCCW = ccwCount;
+  cwCount = 0;
+  ccwCount = 0;
 
-  // Potentiomètre test
-  // If last and current state of CLK are different, then pulse occurred
-	// React to only 1 state change to avoid double count
-	if (currentStateCLK != lastStateCLK  && currentStateCLK == 1){
-
-		// If the DT state is different than the CLK state then
-		// the encoder is rotating CCW so decrement
-		if (digitalRead(POTENTIO_LEFT) != currentStateCLK) {
-			counter --;
-			currentDir ="CCW";
-		} else {
-			// Encoder is rotating CW so increment
-			counter ++;
-			currentDir ="CW";
-		}
-
-		Serial.print("Direction: ");
-		Serial.print(currentDir);
-		Serial.print(" | Counter: ");
-		Serial.println(counter);
-	}
-
-	// Remember last CLK state
-	lastStateCLK = currentStateCLK;
+  if (inEditingMode) {
+    // Mettre à jour la valeur de la bande courante avec les impulsions du rotary encoder
+    int bandIndex = settingsScreen->currentSelectedBand;
+    if (bandIndex >= 0 && bandIndex < NUM_BANDS) {
+      for (int i = 0; i < localCW; i++) {
+        settingsScreen->bandLevels[bandIndex] = constrain(settingsScreen->bandLevels[bandIndex] + 1, -5, 5);
+        // JUSTE POUR DEBUG
+        Serial.print("Band ");
+        Serial.print(bandIndex);
+        Serial.print(" increased to ");
+        Serial.println(settingsScreen->bandLevels[bandIndex]);
+      }
+      for (int i = 0; i < localCCW; i++) {
+        settingsScreen->bandLevels[bandIndex] = constrain(settingsScreen->bandLevels[bandIndex] - 1, -5, 5);
+        // JUSTE POUR DEBUG
+        Serial.print("Band ");
+        Serial.print(bandIndex);
+        Serial.print(" decreased to ");
+        Serial.println(settingsScreen->bandLevels[bandIndex]);
+      }
+    }
+  }
+  // juste pour tester
+  // else {
+  //   // Si on n'est pas en mode édition, vous pouvez laisser afficher les messages CW/CCW
+  //   while (localCW-- > 0) {
+  //     Serial.println("CW");
+  //   }
+  //   while (localCCW-- > 0) {
+  //     Serial.println("CCW");
+  //   }
+  // }
 
   // Regarder si le bouton a été pressé ET si le temps écoulé depuis la dernière pression est supérieur à 300 ms
   // car sinon peut être interprété comme plusieurs pressions
@@ -118,4 +129,30 @@ void loop() {
   }
 
   delay(50);
+}
+
+void handleEncoder() {
+  uint8_t currentAB = (digitalRead(POTENTIO_RIGHT) << 1) | digitalRead(POTENTIO_LEFT);
+  if (currentAB == lastAB) return;
+  // voir https://www.youtube.com/watch?v=9j-y6XlaE80&ab_channel=FriendlyWire
+  // Rotation CW
+  if ((lastAB == 0b00 && currentAB == 0b01) ||
+      (lastAB == 0b01 && currentAB == 0b11) ||
+      (lastAB == 0b11 && currentAB == 0b10) ||
+      (lastAB == 0b10 && currentAB == 0b00)) {
+    if (currentAB == 0b00) {
+      cwCount++;
+    }
+  }
+  // Rotation CCW
+  else if ((lastAB == 0b00 && currentAB == 0b10) ||
+           (lastAB == 0b10 && currentAB == 0b11) ||
+           (lastAB == 0b11 && currentAB == 0b01) ||
+           (lastAB == 0b01 && currentAB == 0b00)) {
+    if (currentAB == 0b00) {
+      ccwCount++;
+    }
+  }
+
+  lastAB = currentAB;
 }
