@@ -1,39 +1,58 @@
+#pragma once
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <commonDef.h>
 #include "Screens.h"
+
 // Merci: https://lastminuteengineers.com/rotary-encoder-arduino-tutorial/
+#define SDA 33
+#define SCL 32
 #define PUSH_BUTTON 4
 #define POTENTIO_RIGHT 2
 #define POTENTIO_LEFT 15
 
+extern short state;
+extern AudioModule audioMod;
+
 // Global instance for the screen
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 
-SettingsScreen* settingsScreen = nullptr;
 MainScreen* mainScreen = nullptr;
+SettingsScreen* settingsScreen = nullptr;
 
 unsigned long lastButtonTime = 0;
-bool inEditingMode = false;
 
 int cwCount = 0;
 int ccwCount = 0;
 uint8_t lastAB = 0;
 
 
+void userSetup();
+void userLoop();
+void onEncoderChange();
+void encoderLoop();
+void buttonLoop();
 
-void setup() {
-  Serial.begin(115200);
-  
+void userTask(void*) {
+  while(true) {
+    userLoop();
+  }
+}
+
+void userSetup() {
   // (pins 33(SDA), 32(SCL) généralement)
-  Wire.begin(33, 32);
+  Wire.begin(SDA, SCL);
 
   // Initialisation de l'écran OLED
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println("Erreur d'initialisation de l'écran OLED");
     while (1) { /* Blocage en cas d'erreur */ }
   }
+  display.clearDisplay();
+  display.display();
 
   // Initialisation des boutons + potentiomètre
   pinMode(PUSH_BUTTON, INPUT_PULLUP);
@@ -42,31 +61,36 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(POTENTIO_RIGHT), onEncoderChange ,CHANGE);
   attachInterrupt(digitalPinToInterrupt(POTENTIO_LEFT), onEncoderChange ,CHANGE);
 
-  // Efface l'écran pour partir sur une base propre
-  display.clearDisplay();
-  display.display();
-
-  settingsScreen = new SettingsScreen{ display };
   mainScreen = new MainScreen{ display };
-
-  // valeur de test
-  settingsScreen->bandLevels[0] = 5; 
-  settingsScreen->bandLevels[1] = -5; 
-
-  mainScreen->draw();
+  settingsScreen = new SettingsScreen{ display }; 
 }
 
-void loop() {
+void userLoop() {
+  static TickType_t lastWakeTime = xTaskGetTickCount();
   encoderLoop();
   buttonLoop();
-  soundLoop();
 
-  delay(50);
-}
+  switch (state)
+  {
+  case State::VISUAL:
+    audioMod.masterGain = 8.0f;  
+    mainScreen->update();
+    mainScreen->draw();
+    mainScreen->refreshDisplay();
+    break;
+  case State::MODIF:
+    settingsScreen->update();
+    settingsScreen->draw();
+    settingsScreen->refreshDisplay();
+    break;
+  case State::AUDIO:
+    audioMod.masterGain = 1.5f;
+    break;
+  default:
+    break;
+  }
 
-
-void soundLoop() {
-  
+  vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(50));
 }
 
 
@@ -77,38 +101,28 @@ void encoderLoop() {
   cwCount = 0;
   ccwCount = 0;
 
-  if (inEditingMode) {
+  if (state == State::MODIF) {
     // Mettre à jour la valeur de la bande courante avec les impulsions du rotary encoder
     int bandIndex = settingsScreen->currentSelectedBand;
-    if (bandIndex >= 0 && bandIndex < NUM_BANDS) {
+    if (bandIndex >= 0 && bandIndex < NB_BANDS) {
       for (int i = 0; i < localCW; i++) {
         settingsScreen->bandLevels[bandIndex] = constrain(settingsScreen->bandLevels[bandIndex] + 1, -5, 5);
-        // JUSTE POUR DEBUG
-        Serial.print("Band ");
-        Serial.print(bandIndex);
-        Serial.print(" increased to ");
-        Serial.println(settingsScreen->bandLevels[bandIndex]);
+        audioMod.setBand(bandIndex, (settingsScreen->bandLevels[bandIndex] + 5));
       }
       for (int i = 0; i < localCCW; i++) {
         settingsScreen->bandLevels[bandIndex] = constrain(settingsScreen->bandLevels[bandIndex] - 1, -5, 5);
-        // JUSTE POUR DEBUG
-        Serial.print("Band ");
-        Serial.print(bandIndex);
-        Serial.print(" decreased to ");
-        Serial.println(settingsScreen->bandLevels[bandIndex]);
+        audioMod.setBand(bandIndex, (settingsScreen->bandLevels[bandIndex] + 5));
       }
     }
   }
-  // DEBUG en console.
-  // else {
-  //   // Si on n'est pas en mode édition, vous pouvez laisser afficher les messages CW/CCW
-  //   while (localCW-- > 0) {
-  //     Serial.println("CW");
-  //   }
-  //   while (localCCW-- > 0) {
-  //     Serial.println("CCW");
-  //   }
-  // }
+  if (state == State::AUDIO) {
+    for (int i = 0; i < localCW; i++) {
+      audioMod.masterGain += 0.1;
+    }
+    for (int i = 0; i < localCCW; i++) {
+      audioMod.masterGain -= 0.1;
+    }
+  }
 }
 
 
@@ -119,31 +133,17 @@ void buttonLoop() {
   // car sinon peut être interprété comme plusieurs pressions
   if (digitalRead(PUSH_BUTTON) == LOW && (currentTime - lastButtonTime > 300)) {
     lastButtonTime = currentTime;
-    Serial.println("Bouton pressé");
     
-    if (!inEditingMode) {
-      // Passer en mode édition
-      inEditingMode = true;
-      settingsScreen->isEditing = true;
-      settingsScreen->currentSelectedBand = 0;
+    if (state != State::MODIF) {
+      state = ++state % NB_STATES;
     } else {
       // En mode édition, passer à la prochaine bande
-      settingsScreen->currentSelectedBand++;
-      if (settingsScreen->currentSelectedBand >= NUM_BANDS) {
+      if (settingsScreen->currentSelectedBand == NB_BANDS-1) {
         // Si on dépasse la dernière bande, on quitte le mode édition et on revient à l'écran principal
-        inEditingMode = false;
-        settingsScreen->isEditing = false;
-        mainScreen->draw();
+        state = ++state % NB_STATES;
       }
+      settingsScreen->currentSelectedBand = ++settingsScreen->currentSelectedBand % NB_BANDS;
     }
-  }
-   // Mettre à jour et dessiner l'écran actif
-  if (inEditingMode) {
-    settingsScreen->update();
-    settingsScreen->draw();
-  } else {
-    mainScreen->update();
-    mainScreen->draw();
   }
 }
 
