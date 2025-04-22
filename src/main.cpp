@@ -1,10 +1,14 @@
 #include <Arduino.h>
 #include <audioTask.h>
-#include <displayTask.h>
 #include <userTask.h>
 #include <commonDef.h>
 
 short state;
+enum State {
+    VISUAL = 0,
+    AUDIO = 1,
+    MODIF = 2
+};
 
 void setup() {
     Serial.begin(115200);
@@ -12,12 +16,10 @@ void setup() {
     state = State::VISUAL;
 
     audioSetup();
-    displaySetup();
     userSetup();
 
-    xTaskCreatePinnedToCore(audioTask, "Audio Task", 8192, NULL, 3, NULL, 0);
-    xTaskCreatePinnedToCore(userTask, "User Interface Task", 2048, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(displayTask, "Display Task", 2048, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(audioTask, "Audio Task", 8192, NULL, 2, NULL, 0);
+    xTaskCreatePinnedToCore(userTask, "User Interface Task", 4096, NULL, 1, NULL, 1);
 }
 
 void loop() {
