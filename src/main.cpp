@@ -3,13 +3,6 @@
 #include <userTask.h>
 #include <commonDef.h>
 
-short state;
-enum State {
-    VISUAL = 0,
-    AUDIO = 1,
-    MODIF = 2
-};
-
 void setup() {
     Serial.begin(115200);
 

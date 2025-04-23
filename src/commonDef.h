@@ -4,6 +4,12 @@
 #define MAX_INT16F (float)std::numeric_limits<int16_t>::max()
 #define NB_BANDS 6
 #define NB_STATES 3
+short state;
+enum State {
+    VISUAL = 0,
+    AUDIO = 1,
+    MODIF = 2
+};
 
 // Rotary Encoder
 #define SDA 33

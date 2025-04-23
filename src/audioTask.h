@@ -60,7 +60,7 @@ void audioSetup() {
 void audioLoop() {
     auto t0 = std::chrono::high_resolution_clock::now();
     size_t nbBytesRead = 0;
-
+    
     // Take input from I2C in buffer
     esp_err_t result = i2s_read(I2S_PORT, inBuffer, BufferLen * sizeof(int32_t), &nbBytesRead, 10);
     
@@ -95,22 +95,20 @@ void audioLoop() {
                 std::fill(outStereoBuffer, outStereoBuffer + BufferLen * 2, 0);
             }
         }
-
+        
         // Output to I2C out buffer
         size_t nb_bytes_written = 0;
         result = i2s_write(I2S_PORT, outStereoBuffer, nbSamplesRead * 2 * sizeof(int16_t), &nb_bytes_written, 10);
         
+        auto t3 = std::chrono::high_resolution_clock::now();
+        auto t_total = t3 - t0;
         
         /* Serial.print("audioMod.apply(): ");
-        Serial.print(std::chrono::duration_cast<std::chrono::microseconds>(t_audioMod).count()); */
+        Serial.print(std::chrono::duration_cast<std::chrono::microseconds>(t_audioMod).count());
+        Serial.print(" | audioLoop: ");
+        Serial.print(std::chrono::duration_cast<std::chrono::microseconds>(t_total).count());
+        Serial.print("\n\n"); */
     }
-    
-    auto t3 = std::chrono::high_resolution_clock::now();
-    auto t_total = t3 - t0;
-    
-    /* Serial.print(" | audioLoop: ");
-    Serial.print(std::chrono::duration_cast<std::chrono::microseconds>(t_total).count());
-    Serial.print("\n\n"); */
 }
 
 void i2s_install() {
